@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 typedef struct {
     int *path;
@@ -11,12 +12,22 @@ typedef struct {
     int path_len;
     int start_node;
     int max_depth;
+    long explored;
+    long max_explored;
+    bool aborted;
     cycle_result_t *result;
     graph_t *g;
 } dfs_context_t;
 
 static void dfs_bruteforce_recursive(dfs_context_t *ctx, int node, int depth) {
     if (depth > ctx->max_depth) return;
+
+    if (ctx->explored >= ctx->max_explored) {
+        ctx->aborted = true;
+        return;
+    }
+
+    ctx->explored++;
     
     int *adj_list = graph_get_adj_list(ctx->g);
     int num_users = graph_get_num_users(ctx->g);
@@ -56,20 +67,42 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
     ctx.visited = (int *)calloc(num_users, sizeof(int));
     ctx.result = cycles;
     ctx.g = g;
-    ctx.max_depth = fmin(num_users, 8);
+    ctx.max_depth = fmin(num_users, 6);
+
+    long total_edges = 0;
+    int *adj_list = graph_get_adj_list(g);
+    for (int i = 0; i < num_users; i++) {
+        int *row = adj_list + i * num_users;
+        for (int j = 0; j < num_users; j++) {
+            if (row[j] > 0) total_edges++;
+        }
+    }
+
+    double avg_out_degree = num_users > 0 ? (double)total_edges / num_users : 0.0;
+    if (avg_out_degree > 20) {
+        ctx.max_depth = 4; // Dense graphs explode combinatorially; keep depth small
+    }
+
+    ctx.max_explored = 500000; // Safety budget to avoid runaway recursion on dense graphs
+    ctx.explored = 0;
+    ctx.aborted = false;
     
     for (int start = 0; start < num_users; start++) {
         if (start % 10 == 0) {
             printf("    [DFS Progress] Processing node %d/%d (cycles found: %d)\n", start, num_users, cycles->count);
             fflush(stdout);
         }
-        
+
+        if (ctx.aborted) {
+            break;
+        }
+
         ctx.start_node = start;
         ctx.path_len = 1;
         ctx.path[0] = start;
         memset(ctx.visited, 0, num_users * sizeof(int));
         ctx.visited[start] = 1;
-        
+
         dfs_bruteforce_recursive(&ctx, start, 0);
     }
     
@@ -79,6 +112,10 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
     timer_stop(timer);
     result->execution_time = timer_elapsed_sec(timer);
     result->cycles_found = cycles->count;
+    if (ctx.aborted) {
+        printf("    [DFS Notice] Search stopped early after exploring %ld paths (max depth %d). Try reducing graph size for full search.\n",
+               ctx.explored, ctx.max_depth);
+    }
     timer_free(timer);
     
     return cycles;

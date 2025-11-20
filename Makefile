@@ -1,6 +1,6 @@
 .PHONY: all build clean run help
 
-CC := clang
+CC := $(shell command -v clang >/dev/null 2>&1 && echo clang || echo gcc)
 CFLAGS := -Wall -Wextra -O2 -std=c99 -I./include
 LDFLAGS := -lm -lcjson
 
