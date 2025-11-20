@@ -8,28 +8,25 @@ struct Graph {
     transaction_t *transactions;
     int num_users;
     int num_transactions;
+    int transaction_capacity;
     int *adj_list;
-    int *adj_size;
-    int *adj_capacity;
 };
 
 graph_t* graph_create(int num_users, int num_transactions) {
     graph_t *g = (graph_t *)malloc(sizeof(graph_t));
     g->num_users = num_users;
     g->num_transactions = 0;
-    
+    g->transaction_capacity = num_transactions > 0 ? num_transactions : 1;
+
     g->users = (user_t *)malloc(num_users * sizeof(user_t));
-    g->transactions = (transaction_t *)malloc(num_transactions * sizeof(transaction_t));
-    
+    g->transactions = (transaction_t *)malloc(g->transaction_capacity * sizeof(transaction_t));
+
     g->adj_list = (int *)malloc(num_users * num_users * sizeof(int));
-    g->adj_size = (int *)calloc(num_users, sizeof(int));
-    g->adj_capacity = (int *)malloc(num_users * sizeof(int));
-    
+
     for (int i = 0; i < num_users; i++) {
         g->users[i].user_id = i;
         snprintf(g->users[i].account_number, 32, "ACC_%06d", i);
         g->users[i].balance = 10000.0 + (rand() % 90000);
-        g->adj_capacity[i] = num_users;
     }
     
     memset(g->adj_list, 0, num_users * num_users * sizeof(int));
@@ -39,15 +36,25 @@ graph_t* graph_create(int num_users, int num_transactions) {
 
 void graph_add_transaction(graph_t *g, int from_user, int to_user, double amount, long timestamp) {
     if (from_user >= g->num_users || to_user >= g->num_users) return;
-    
-    if (g->num_transactions < g->num_transactions + 1) {
-        g->transactions[g->num_transactions].from_user = from_user;
-        g->transactions[g->num_transactions].to_user = to_user;
-        g->transactions[g->num_transactions].amount = amount;
-        g->transactions[g->num_transactions].timestamp = timestamp;
-        g->num_transactions++;
+
+    if (g->num_transactions >= g->transaction_capacity) {
+        int new_capacity = g->transaction_capacity * 2;
+        transaction_t *resized = (transaction_t *)realloc(
+            g->transactions, new_capacity * sizeof(transaction_t));
+        if (resized == NULL) {
+            fprintf(stderr, "[ERROR] Failed to grow transaction buffer to %d entries\n", new_capacity);
+            return;
+        }
+        g->transactions = resized;
+        g->transaction_capacity = new_capacity;
     }
-    
+
+    g->transactions[g->num_transactions].from_user = from_user;
+    g->transactions[g->num_transactions].to_user = to_user;
+    g->transactions[g->num_transactions].amount = amount;
+    g->transactions[g->num_transactions].timestamp = timestamp;
+    g->num_transactions++;
+
     int *row = g->adj_list + from_user * g->num_users;
     row[to_user]++;
 }
@@ -84,8 +91,6 @@ void graph_free(graph_t *g) {
     free(g->users);
     free(g->transactions);
     free(g->adj_list);
-    free(g->adj_size);
-    free(g->adj_capacity);
     free(g);
 }
 
