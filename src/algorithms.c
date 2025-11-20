@@ -132,6 +132,34 @@ typedef struct {
     graph_t *g;
 } tarjan_context_t;
 
+static bool dfs_cycle_in_scc(graph_t *g, int node, int start, int *path, int depth, int *visited, int *in_scc, int *cycle_len) {
+    int num_users = graph_get_num_users(g);
+    int *adj_list = graph_get_adj_list(g);
+    int *row = adj_list + node * num_users;
+
+    path[depth] = node;
+
+    for (int next = 0; next < num_users; next++) {
+        if (row[next] == 0 || !in_scc[next]) continue;
+
+        if (next == start && depth >= 2) {
+            path[depth + 1] = start;
+            *cycle_len = depth + 2;
+            return true;
+        }
+
+        if (!visited[next]) {
+            visited[next] = 1;
+            if (dfs_cycle_in_scc(g, next, start, path, depth + 1, visited, in_scc, cycle_len)) {
+                return true;
+            }
+            visited[next] = 0;
+        }
+    }
+
+    return false;
+}
+
 static void tarjan_dfs(tarjan_context_t *ctx, int node) {
     int num_users = graph_get_num_users(ctx->g);
     int *adj_list = graph_get_adj_list(ctx->g);
@@ -146,13 +174,12 @@ static void tarjan_dfs(tarjan_context_t *ctx, int node) {
     
     for (int next = 0; next < num_users; next++) {
         if (row[next] == 0) continue;
-        
+
         if (ctx->ids[next] == -1) {
             tarjan_dfs(ctx, next);
-        }
-        
-        if (ctx->on_stack[next]) {
             ctx->low[node] = fmin(ctx->low[node], ctx->low[next]);
+        } else if (ctx->on_stack[next]) {
+            ctx->low[node] = fmin(ctx->low[node], ctx->ids[next]);
         }
     }
     
@@ -166,18 +193,42 @@ static void tarjan_dfs(tarjan_context_t *ctx, int node) {
             scc[scc_size++] = popped;
             if (popped == node) break;
         }
-        
+
         if (scc_size > 1) {
-            double total = 0.0;
+            int *in_scc = (int *)calloc(num_users, sizeof(int));
             for (int i = 0; i < scc_size; i++) {
-                int from = scc[i];
-                int to = scc[(i + 1) % scc_size];
-                int *from_row = adj_list + from * num_users;
-                total += from_row[to];
+                in_scc[scc[i]] = 1;
             }
-            cycle_result_add(ctx->result, scc, scc_size, total);
+
+            int *path = (int *)malloc(num_users * sizeof(int));
+            int *visited = (int *)calloc(num_users, sizeof(int));
+            int cycle_len = 0;
+            bool found_cycle = false;
+
+            for (int i = 0; i < scc_size && !found_cycle; i++) {
+                int start = scc[i];
+                memset(path, 0, num_users * sizeof(int));
+                memset(visited, 0, num_users * sizeof(int));
+                visited[start] = 1;
+                found_cycle = dfs_cycle_in_scc(ctx->g, start, start, path, 0, visited, in_scc, &cycle_len);
+            }
+
+            if (found_cycle && cycle_len > 0) {
+                double total = 0.0;
+                for (int i = 0; i < cycle_len - 1; i++) {
+                    int from = path[i];
+                    int to = path[i + 1];
+                    int *from_row = adj_list + from * num_users;
+                    total += from_row[to];
+                }
+                cycle_result_add(ctx->result, path, cycle_len - 1, total);
+            }
+
+            free(in_scc);
+            free(path);
+            free(visited);
         }
-        
+
         free(scc);
     }
 }
