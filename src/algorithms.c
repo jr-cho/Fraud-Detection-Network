@@ -6,6 +6,8 @@
 #include <stdint.h>
 
 static void normalize_cycle(int *cycle, int length) {
+    if (length <= 0) return;
+
     int min_index = 0;
     for (int i = 1; i < length; i++)
         if (cycle[i] < cycle[min_index])
@@ -13,12 +15,17 @@ static void normalize_cycle(int *cycle, int length) {
 
     int *tmp = malloc(length * sizeof(int));
     int *rev = malloc(length * sizeof(int));
+    if (!tmp || !rev) {
+        free(tmp);
+        free(rev);
+        return;
+    }
 
     for (int i = 0; i < length; i++)
         tmp[i] = cycle[(min_index + i) % length];
 
     for (int i = 0; i < length; i++)
-        rev[i] = tmp[(length - i) % length];
+        rev[i] = tmp[length - 1 - i];
 
     int use_rev = 0;
     for (int i = 0; i < length; i++) {
@@ -38,31 +45,9 @@ typedef struct {
     int *stack;
     int stack_len;
     int start;
-    uint8_t *reachable_to_start;
-    long expansions;
-    long max_expansions;
 } bf_ctx_t;
 
-static int can_reach_start(bf_ctx_t *ctx, int node) {
-    return ctx->reachable_to_start[node];
-}
-
-static void dfs_mark_reachable(int node, int start, int *adj, int n, uint8_t *vis) {
-    if (vis[node]) return;
-    vis[node] = 1;
-
-    int *row = adj + node * n;
-    for (int v = 0; v < n; v++)
-        if (row[v])
-            dfs_mark_reachable(v, start, adj, n, vis);
-}
-
 static void dfs_bf(bf_ctx_t *ctx, int node) {
-    if (ctx->expansions++ > ctx->max_expansions)
-        return;
-
-    if (ctx->stack_len > 12)
-        return;
 
     ctx->visited[node] = 1;
     ctx->stack[ctx->stack_len++] = node;
@@ -72,10 +57,8 @@ static void dfs_bf(bf_ctx_t *ctx, int node) {
     int *row = adj + node * n;
 
     for (int v = 0; v < n; v++) {
-        if (row[v] == 0)
-            continue;
 
-        if (!can_reach_start(ctx, v))
+        if (!row[v])
             continue;
 
         if (v == ctx->start && ctx->stack_len >= 3) {
@@ -101,7 +84,6 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
     timer_start(t);
 
     int n = graph_get_num_users(g);
-    int *adj = graph_get_adj_list(g);
 
     bf_ctx_t ctx;
     ctx.g = g;
@@ -109,41 +91,21 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
     ctx.visited = calloc(n, sizeof(int));
     ctx.stack = malloc(n * sizeof(int));
     ctx.stack_len = 0;
-    ctx.reachable_to_start = calloc(n, sizeof(uint8_t));
-
-    ctx.expansions = 0;
-    ctx.max_expansions = 2500000;
 
     for (int start = 0; start < n; start++) {
-
-        int has_out = 0, has_in = 0;
-        for (int j = 0; j < n; j++) {
-            if (adj[start * n + j]) has_out = 1;
-            if (adj[j * n + start]) has_in = 1;
-        }
-        if (!has_out || !has_in)
-            continue;
-
-        memset(ctx.reachable_to_start, 0, n);
-        dfs_mark_reachable(start, start, adj, n, ctx.reachable_to_start);
-
         ctx.start = start;
         memset(ctx.visited, 0, n * sizeof(int));
         ctx.stack_len = 0;
-
         dfs_bf(&ctx, start);
-
-        if (ctx.expansions > ctx.max_expansions)
-            break;
     }
 
     timer_stop(t);
+
     result->execution_time = timer_elapsed_ms(t);
-    result->cycles_found = ctx.result->count;
+    result->cycles_found   = ctx.result->count;
 
     free(ctx.visited);
     free(ctx.stack);
-    free(ctx.reachable_to_start);
     timer_free(t);
 
     return ctx.result;
@@ -152,16 +114,18 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
 typedef struct {
     graph_t *g;
     cycle_result_t *result;
-
     int *stack;
-    int stack_len;
     int *on_stack;
     int *ids;
     int *low;
+    int stack_len;
     int id;
     int n;
-
 } tarjan_t;
+
+static int int_compare(const void *a, const void *b) {
+    return (*(const int*)a - *(const int*)b);
+}
 
 static void dfs_tarjan(tarjan_t *t, int at) {
 
@@ -173,7 +137,8 @@ static void dfs_tarjan(tarjan_t *t, int at) {
     int *row = adj + at * t->n;
 
     for (int v = 0; v < t->n; v++) {
-        if (row[v] == 0)
+
+        if (!row[v])
             continue;
 
         if (t->ids[v] == -1) {
@@ -187,7 +152,7 @@ static void dfs_tarjan(tarjan_t *t, int at) {
 
     if (t->ids[at] == t->low[at]) {
 
-        int nodes[1024];
+        int *nodes = malloc(t->n * sizeof(int));
         int count = 0;
 
         while (1) {
@@ -198,16 +163,24 @@ static void dfs_tarjan(tarjan_t *t, int at) {
         }
 
         if (count > 1) {
+
+            qsort(nodes, count, sizeof(int), int_compare);
+
             for (int i = 0; i < count; i++) {
+
                 int *cycle = malloc(count * sizeof(int));
+
                 for (int j = 0; j < count; j++)
                     cycle[j] = nodes[(i + j) % count];
 
                 normalize_cycle(cycle, count);
                 cycle_result_add(t->result, cycle, count, 0.0);
+
                 free(cycle);
             }
         }
+
+        free(nodes);
     }
 }
 
@@ -241,8 +214,9 @@ cycle_result_t* find_cycles_tarjan(graph_t *g, algo_result_t *result) {
             dfs_tarjan(&t, i);
 
     timer_stop(tm);
+
     result->execution_time = timer_elapsed_ms(tm);
-    result->cycles_found = t.result->count;
+    result->cycles_found   = t.result->count;
 
     free(t.stack);
     free(t.on_stack);
