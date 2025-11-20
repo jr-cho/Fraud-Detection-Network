@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 static void normalize_cycle(int *cycle, int length) {
     int min_index = 0;
