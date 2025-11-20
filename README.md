@@ -20,7 +20,7 @@ To analyze potential fraud rings, this project implements **two fundamentally di
 1. **Brute Force DFS Cycle Enumeration**
 2. **Tarjan’s Algorithm for Strongly Connected Components (SCCs)**
 
-The goal is to highlight the dramatic difference between **exponential algorithms** and **optimal linear-time algorithms**, a core learning objective of **COP4531.01 — Algorithm Design & Analysis**.
+The goal is to highlight the dramatic difference between **exponential algorithms** and **optimal linear time algorithms**, a core learning objective of **COP4531.01 — Algorithm Design & Analysis**.
 
 ---
 
@@ -48,7 +48,7 @@ The goal is to highlight the dramatic difference between **exponential algorithm
 # Background
 
 Detecting fraudulent activity often involves identifying **groups of accounts sending money to each other in loops**.
-These loops — cycles in a directed graph — can indicate:
+These loops cycles in a directed graph can indicate:
 
 * Money laundering
 * Synthetic account networks
