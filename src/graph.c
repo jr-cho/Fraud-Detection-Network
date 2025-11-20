@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct Graph {
+struct Graph {
     user_t *users;
     transaction_t *transactions;
     int num_users;
@@ -11,7 +11,7 @@ typedef struct Graph {
     int *adj_list;
     int *adj_size;
     int *adj_capacity;
-} graph_t;
+};
 
 graph_t* graph_create(int num_users, int num_transactions) {
     graph_t *g = (graph_t *)malloc(sizeof(graph_t));

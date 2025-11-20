@@ -1,10 +1,9 @@
-#include "algorithms.h"
-#include "utils.h"
+#include "../include/algorithms.h"
+#include "../include/utils.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-// ============== DFS BRUTE FORCE ==============
+#include <stdio.h>
 
 typedef struct {
     int *path;
@@ -27,7 +26,6 @@ static void dfs_bruteforce_recursive(dfs_context_t *ctx, int node, int depth) {
         if (row[next] == 0) continue;
         
         if (next == ctx->start_node && ctx->path_len >= 3) {
-            // Found a cycle back to start
             double total = 0.0;
             for (int i = 0; i < ctx->path_len; i++) {
                 int from = ctx->path[i];
@@ -36,7 +34,6 @@ static void dfs_bruteforce_recursive(dfs_context_t *ctx, int node, int depth) {
                 total += from_row[to];
             }
             cycle_result_add(ctx->result, ctx->path, ctx->path_len, total);
-            // Continue to find other cycles, don't return
         } else if (!ctx->visited[next] && next != ctx->start_node) {
             ctx->visited[next] = 1;
             ctx->path[ctx->path_len++] = next;
@@ -61,8 +58,12 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
     ctx.g = g;
     ctx.max_depth = fmin(num_users, 8);
     
-    // Start DFS from each node
     for (int start = 0; start < num_users; start++) {
+        if (start % 10 == 0) {
+            printf("    [DFS Progress] Processing node %d/%d (cycles found: %d)\n", start, num_users, cycles->count);
+            fflush(stdout);
+        }
+        
         ctx.start_node = start;
         ctx.path_len = 1;
         ctx.path[0] = start;
@@ -82,8 +83,6 @@ cycle_result_t* find_cycles_dfs_bruteforce(graph_t *g, algo_result_t *result) {
     
     return cycles;
 }
-
-// ============== TARJAN'S ALGORITHM ==============
 
 typedef struct {
     int *ids;

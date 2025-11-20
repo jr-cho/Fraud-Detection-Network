@@ -2,7 +2,7 @@
 
 CC := clang
 CFLAGS := -Wall -Wextra -O2 -std=c99 -I./include
-LDFLAGS := -lm
+LDFLAGS := -lm -lcjson
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
